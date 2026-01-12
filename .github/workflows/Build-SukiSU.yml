@@ -1,4 +1,4 @@
-name: 编译一加13r内核
+name: 编译一加13r内核 (Custom Choice)
 
 on:
   workflow_dispatch:
@@ -97,24 +97,23 @@ on:
         default: false
       VFS:
         type: boolean
-        description: "Включить ручные хуки?"
+        description: "Включить ручные хуки (VFS)?"
         required: true
         default: false
       KPM:
         type: boolean
         description: "Включить KPM?"
         required: true
-        default: false
+        default: true
       ZRAM:
         type: boolean
-        description: "Не выбирайте это"
+        description: "Включить ZRAM/LZ4KD?"
         required: true
         default: false
 
 env:
-  RETENTION_COUNT: 7  # 保留的发布版本数量
+  RETENTION_COUNT: 7
   KERNEL_NAME: '-android14-11-o-g666666666666'
-  # Остальные переменные удалены из env, так как они теперь передаются через inputs
 
 jobs:
   build:
@@ -140,7 +139,6 @@ jobs:
 
       - name: 安装依赖项
         run: |
-
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y python3 git curl
 
@@ -212,8 +210,6 @@ jobs:
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-
-
           if [ "${{ github.event.inputs.ZRAM }}" == "true" ]; then
           echo "正在给内核打zram补丁"
           cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
@@ -221,8 +217,6 @@ jobs:
           cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto
           cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
           fi
-
-
 
           cd ./common
           patch -p1 < 50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch || true
@@ -487,7 +481,13 @@ jobs:
 
       - name: 打包 AnyKernel3 (ZIP)
         run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace
+          cd $GITHUB_WORKSPACE/AnyKernel3
+          zip -r ../AnyKernel3_KernelSU_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}.zip ./*
+          cd ..
+
+     # - name: 打包原始镜像 (ZIP)
+       # run: |
+       #   cd $GITHUB_WORKSPACE/kernel_workspace
       #    zip -r ../Image_KernelSU_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}.zip ./*
 
       - name: 上传 ZIP 工件
@@ -497,3 +497,51 @@ jobs:
           path: |
             *.zip
           retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+      
+    steps:
+      - name: 下载 ZIP 工件
+        uses: actions/download-artifact@v4
+        with:
+          name: Kernel_ZIP_Artifacts
+          path: ./release_zips
+         
+      - name: 创建发布
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "build-${{ github.run_id }}"
+          name: "OnePlus_ACE5 Build ${{ github.run_number }}"
+          body: |
+            每日自动编译 SukiSU-Ultra 内核
+            - 机型： 一加ACE5
+            - 特性：MKSU+SUSFS+VFS+KPM+LZ4K
+            - 编译时间: ${{ github.event.repository.updated_at }}
+            - 内核版本: ${{ needs.build.outputs.ksuver }}
+            - 推荐管理器：[SukiSU-Ultra](https://github.com/ShirkNeko/SukiSU-Ultra/releases)
+            - 如果构建的内核版本没变，不必更新！
+            - 使用 AnyKernel3/Recovery/TWRP 刷入
+            
+          draft: false
+          prerelease: false
+          files: |
+            release_zips/AnyKernel3_KernelSU_*.zip
+            release_zips/Image_KernelSU_*.zip
+
+      - name: 清理旧版本
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          keep_latest: ${{ env.RETENTION_COUNT }}
+          delete_tags: true
+          delete_tag_pattern: 'build-*'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
