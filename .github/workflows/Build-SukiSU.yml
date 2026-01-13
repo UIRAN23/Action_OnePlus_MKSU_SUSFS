@@ -6,7 +6,7 @@ on:
         type: choice
         description: "分支"
         required: true
-        default: sm8550
+        default: sm8650
         options:
           - sm7550
           - sm7675
@@ -35,8 +35,8 @@ on:
           - oneplus_ace2_pro_v
           - oneplus_ace3_v
           - oneplus_open_v
-          - oneplus12_v
-          - oneplus_13r
+          - oneplus_12_b
+          - oneplus_13r_b
           - oneplus_ace3_pro_v
           - oneplus_ace5
           - oneplus_pad2_v
